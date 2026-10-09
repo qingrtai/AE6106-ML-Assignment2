@@ -1,0 +1,490 @@
+---
+title: "Assignment 2: Data Analytics and Machine Learning"
+subtitle: "Group ___"
+author: "Member 1 (Student ID) · Member 2 (Student ID) · Member 3 (Student ID)"
+date: today
+date-format: "D MMMM YYYY"
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    geometry: margin=2.2cm
+    fontsize: 11pt
+    linestretch: 1.1
+    fig-pos: "H"
+    colorlinks: true
+    include-in-header:
+      text: |
+        \usepackage{float}
+        \usepackage{booktabs}
+        \usepackage{amsmath}
+        \RecustomVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\},fontsize=\small}
+execute:
+  echo: false
+  warning: false
+  message: false
+knitr:
+  opts_chunk:
+    comment: "#>"
+    fig.align: center
+    out.width: "100%"
+---
+
+```{r}
+#| label: read-script
+#| include: false
+# All analysis code lives in Assignment2.R; the chunks below run it piece by piece.
+knitr::read_chunk("Assignment2.R")
+fmt_p <- function(p) ifelse(p < 0.001, "< 0.001", formatC(p, format = "f", digits = 3))
+num   <- function(x, d = 2) formatC(x, format = "f", digits = d, big.mark = ",")
+```
+
+```{r setup}
+```
+
+*The complete R code is in the accompanying script `Assignment2.R`. Code is shown below for Questions 2 and 3; for Question 6 only the results are shown, to keep the report readable.*
+
+# Question 1: Bias–variance decomposition
+
+Fix a point $x$. The true value $f(x)$ is a constant, while the estimate $\hat f(x)$ is random because it depends on the training sample that was drawn. Write $\bar f(x) = E[\hat f(x)]$, which is also a constant. Adding and subtracting $\bar f(x)$:
+
+$$
+\begin{aligned}
+E\big[(f(x)-\hat f(x))^2\big]
+&= E\Big[\big(\underbrace{f(x)-\bar f(x)}_{\text{constant}} + \bar f(x)-\hat f(x)\big)^2\Big] \\
+&= \big(f(x)-\bar f(x)\big)^2
+ + 2\big(f(x)-\bar f(x)\big)\,\underbrace{E\big[\bar f(x)-\hat f(x)\big]}_{=\,\bar f(x)-\bar f(x)\,=\,0}
+ + E\Big[\big(\hat f(x)-\bar f(x)\big)^2\Big] \\
+&= \big[f(x)-E\hat f(x)\big]^2 + \operatorname{Var}\big[\hat f(x)\big]
+ \;=\; \text{Bias}^2\big[\hat f(x)\big] + \operatorname{Var}\big[\hat f(x)\big].
+\end{aligned}
+$$
+
+The cross term vanishes because $f(x)-\bar f(x)$ is a constant and $\hat f(x)$ deviates from its own mean by zero on average. If we compare the prediction with a noisy observation $y = f(x)+\varepsilon$, where $E[\varepsilon]=0$, $\operatorname{Var}(\varepsilon)=\sigma^2$ and $\varepsilon$ is independent of the training data, the same argument gives
+$E[(y-\hat f(x))^2] = \text{Bias}^2 + \text{Variance} + \sigma^2$. The term $\sigma^2$ is the irreducible error that no model can remove.
+
+**How we use the decomposition in machine learning**
+
+* **It explains the bias–variance trade-off.** A more flexible model (a deeper tree, a smaller $k$ in KNN, QDA instead of LDA, more polynomial terms) reduces bias but increases variance, because it starts fitting noise in the particular training sample. Test error is therefore U-shaped in model complexity, while training error keeps falling. This is why a model must never be chosen on training error.
+* **It guides model selection and tuning.** We choose the complexity that minimises *estimated test error*, using a validation set or cross-validation. Examples are $k$ in KNN, the number of features tried at each split of a random forest, and the complexity parameter `cp` of a tree. We do exactly this in Question 3(e) and Question 6.
+* **It helps diagnose a model and choose the fix.**
+  * High training error and high test error mean high bias (underfitting). We need more informative features or a more flexible model.
+  * Low training error but much higher test error means high variance (overfitting). We need more data, regularisation, pruning, fewer features, or averaging. Bagging and random forests work mainly by reducing variance; boosting mainly reduces bias.
+
+# Question 2: Confusion matrix for a credit-risk model
+
+We treat **Default as the positive class**. The table gives TP = 700, FN = 400 (defaulters predicted as non-default), FP = 100 and TN = 56,000.
+
+```{r q2}
+#| echo: true
+```
+
+**Sensitivity** $= TP/(TP+FN) = 700/1{,}100 =$ **`r pct(q2_metrics[["Sensitivity (recall, TPR)"]], 2)`**, and **accuracy** $= (TP+TN)/N = 56{,}700/57{,}200 =$ **`r pct(q2_metrics[["Accuracy"]], 2)`**.
+
+**Is this a good model? For a risk assessor, no, or at least not good enough.**
+
+* **The high accuracy is misleading because the classes are very imbalanced.** Only `r pct(q2_metrics[["Default rate in data (prevalence)"]], 2)` of borrowers default. A useless rule that labels *everyone* "non-default" would already reach `r pct(q2_metrics[["Baseline accuracy: predict all non-default"]], 2)` accuracy. The model improves on that by only about one percentage point.
+* **The model misses more than a third of the defaulters.** Sensitivity is only 63.6%, so 400 of the 1,100 actual defaulters (`r pct(q2_metrics[["Miss rate (FNR = 1 - sens.)"]], 1)`) would be classified as safe and would receive credit. In credit risk a false negative (lending to a defaulter) usually costs far more than a false positive (turning away a good customer): the bank loses principal rather than just some interest income.
+* **The model is not without merit.** Specificity is `r pct(q2_metrics[["Specificity (TNR)"]], 2)` and precision is `r pct(q2_metrics[["Precision (PPV)"]], 1)`, so when it flags a borrower it is usually right. The problem is that its threshold is too conservative.
+* **How to improve it.** Lower the classification threshold, or use cost-sensitive weights or resampling of the minority class, to raise sensitivity at the price of some specificity. Then judge the model with metrics that reflect the costs: an ROC curve, precision–recall, or the expected loss. Raw accuracy is the wrong metric here.
+
+# Question 3: Graduate admission data
+
+```{r q3-load}
+#| echo: true
+#| results: hide
+```
+
+## (a) Relationships among GRE, GPA and rank
+
+```{r q3a}
+#| echo: true
+#| fig-width: 8
+#| fig-height: 6.2
+#| fig-cap: "Relationships among GRE, GPA and institution rank (400 applicants)."
+```
+
+**Findings.**
+
+* **GRE and GPA are moderately positively correlated** ($r =$ `r num(q3a_cor[1], 2)`, $p < 0.001$). Applicants with a higher GPA also tend to score higher on the GRE, but the scatter is wide, so the two scores carry partly different information.
+* **Rank is only weakly related to the two scores.** Mean GRE falls steadily from rank 1 (`r num(mean(adm$gre[adm$rank == "1"]), 0)`) to rank 4 (`r num(mean(adm$gre[adm$rank == "4"]), 0)`). GPA shows no monotone pattern: rank 3 has a higher mean GPA than rank 2. The box plots overlap heavily (Spearman correlation of rank with GPA is `r num(q3a_cor[2], 2)` and with GRE is `r num(q3a_cor[3], 2)`).
+* **The GRE–GPA slope is similar in every rank**, so there is no strong interaction between rank and the scores.
+* **Overall**, prestige of the undergraduate institution is not simply a proxy for academic ability. The three features can contribute separately to an admission decision.
+
+## (b) Average GPA by institution rank
+
+```{r q3b}
+#| echo: true
+#| results: hide
+```
+
+```{r}
+knitr::kable(gpa_by_rank, digits = c(0, 0, 3, 1), booktabs = TRUE,
+             col.names = c("Rank", "Applicants", "Mean GPA", "Mean GRE"),
+             caption = "Average GPA (and GRE) by institution rank")
+```
+
+Mean GPA is between `r num(min(gpa_by_rank$mean_GPA), 2)` and `r num(max(gpa_by_rank$mean_GPA), 2)` in every group. Rank 1 is highest (`r num(gpa_by_rank$mean_GPA[1], 3)`) and rank 4 is lowest (`r num(gpa_by_rank$mean_GPA[4], 3)`), but the differences are small compared with the spread within each group.
+
+## (c) Percentage of applicants accepted from each rank
+
+```{r q3c}
+#| echo: true
+#| results: hide
+```
+
+```{r}
+knitr::kable(admit_by_rank, digits = c(0, 0, 0, 1), booktabs = TRUE,
+             col.names = c("Rank", "Applicants", "Admitted", "Admitted (%)"),
+             caption = "Admission rate by institution rank")
+```
+
+The admission rate falls steadily with prestige, from `r num(admit_by_rank$admit_rate[1], 1)`% for rank 1 to `r num(admit_by_rank$admit_rate[4], 1)`% for rank 4 (overall `r pct(overall_admit_rate, 2)`). Part (b) showed that GPA hardly differs across ranks. The large gap in admission rates therefore suggests that the committee values the prestige of the undergraduate institution in itself.
+
+## (d) Decision tree
+
+```{r q3d}
+#| echo: true
+```
+
+```{r q3d-plot}
+#| echo: true
+#| fig-width: 8.5
+#| fig-height: 5
+#| fig-cap: "Classification tree for admission (rpart default settings, cp = 0.01). Each box shows the predicted class, P(Admitted) and the share of applicants in that node."
+```
+
+**Structure of the tree.** rpart grows the tree by repeatedly choosing the split that most reduces the Gini impurity. Each leaf predicts the majority class among its applicants, which is the same as using a 0.5 probability threshold. The tree has 8 splits and 9 leaves.
+
+1. **Root split, GPA < 3.415.** This is the single most informative variable. It divides applicants into a low-GPA group (208 applicants, 21.6% admitted) and a high-GPA group (192 applicants, 42.7% admitted).
+2. **Low-GPA branch.**
+   * Applicants from rank 3–4 schools are rejected (13.1% admitted).
+   * Applicants from rank 1–2 schools are admitted only if their GRE is at least 730 (70% admitted, only 10 applicants). Otherwise they are rejected (25.3%).
+3. **High-GPA branch.**
+   * Rank 1 applicants are **admitted** (75% admitted, 32 applicants).
+   * Rank 3–4 applicants are **rejected** (30.3%).
+   * Rank 2 applicants are split further on GPA and GRE: GPA < 3.495 $\rightarrow$ admitted (68.8%); 3.495 $\leq$ GPA < 3.73 $\rightarrow$ rejected (19.2%); GPA $\geq$ 3.73 and GRE < 690 $\rightarrow$ admitted (60%); GPA $\geq$ 3.73 and GRE $\geq$ 690 $\rightarrow$ rejected (33.3%).
+
+**Reading the tree.** A high GPA plus a top-ranked institution is the clearest route to admission. GPA and rank do most of the work, and GRE matters mainly at the margin. The deepest rank-2 splits are based on very small nodes (9 to 29 applicants) and partly contradict common sense: a *higher* GRE leads to rejection, and a middling GPA does worse than a lower one. This is a typical sign that the tree is fitting noise, which part (e) confirms.
+
+## (e) Examining the tree with `printcp`
+
+```{r q3e}
+#| echo: true
+```
+
+```{r q3e-cp}
+#| echo: true
+```
+
+```{r q3e-plot}
+#| echo: true
+#| fig-width: 9
+#| fig-height: 4.3
+#| fig-cap: "Left: cross-validated relative error (+/-1 SE) against cp. Right: tree pruned at the cp with the lowest cross-validated error."
+```
+
+**What the columns mean.**
+
+* **Root node error** = 127/400 = 0.3175. This is the error from predicting "Rejected" for everyone, and all other errors are expressed relative to it.
+* **CP** is the complexity parameter. In cost-complexity pruning a split is kept only if it lowers the relative error by at least CP. Equivalently, the tree minimises $\text{Error}(T) + cp \times |T| \times \text{root error}$, where $|T|$ is the number of splits.
+* **nsplit** is the number of splits, so the number of leaves is nsplit + 1.
+* **rel error** is the *training* error relative to the root.
+* **xerror** is the 10-fold *cross-validated* error relative to the root, and **xstd** is its standard error.
+
+**What the table shows.**
+
+* **Training error keeps falling as the tree grows.** rel error goes from 1 to `r num(cp_tab[["rel error"]][nrow(cp_tab)], 3)`, so the full 8-split tree misclassifies `r num(cp_tab$train_error_pct[nrow(cp_tab)], 2)`% of the training applicants.
+* **Cross-validated error is lowest at `r cp_tab$nsplit[best_row]` splits** (xerror = `r num(cp_tab$xerror[best_row], 3)`, a CV error rate of `r num(cp_tab$cv_error_pct[best_row], 2)`%). It then *rises* to `r num(cp_tab$xerror[nrow(cp_tab)], 3)` for the full tree (`r num(cp_tab$cv_error_pct[nrow(cp_tab)], 2)`%), which is worse than not splitting at all. **The extra splits from part (d) overfit.**
+* **The predictive power is weak.** Every xerror lies within about one standard error ($\approx$ `r num(mean(cp_tab$xstd), 3)`) of 1. Even the best tree beats the "reject everyone" rule (31.75% error) by only `r num(100 * root_err - cp_tab$cv_error_pct[best_row], 1)` percentage points.
+
+**How to choose the most suitable cp.**
+
+* **Minimum-xerror rule.** Pick the cp with the smallest xerror, here **cp = `r num(cp_min, 4)`** (`r cp_tab$nsplit[best_row]` splits), and run `prune(tree, cp = ...)`.
+* **One-standard-error rule.** Pick the *simplest* tree whose xerror is below min(xerror) + its xstd, here `r num(se_limit, 3)`. That gives cp = `r num(cp_1se, 4)`, which is the root with no split. It would predict that nobody is admitted, so it is useless for this purpose.
+
+We therefore use the minimum-xerror cp. The pruned tree (Figure 3, right) is simple: **GPA < 3.415 $\rightarrow$ rejected; GPA $\geq$ 3.415 and rank 1 $\rightarrow$ admitted; otherwise rejected.**
+
+Because xerror comes from random CV folds, it changes with the seed. We fix `set.seed(2026)` for reproducibility. In practice one could repeat the cross-validation several times, or set `xval` higher, before settling on cp.
+
+## (f) Applicant with GPA = 3.8, GRE = 690, rank 4
+
+```{r q3f}
+#| echo: true
+```
+
+Following the tree from part (d):
+
+1. GPA = 3.8 $\geq$ 3.415, so we go to the high-GPA branch.
+2. Rank 4 is not rank 1, so we move into the rank 2–4 node.
+3. Rank 4 belongs to the rank 3–4 group, which is a leaf with P(Admitted) = `r num(q3f$P_admitted[1], 3)`.
+
+**The tree predicts that this applicant will *not* be admitted.** In the training data only about 30% of high-GPA applicants from rank 3–4 schools were accepted. GRE is never used on this path, so the good GRE score of 690 does not change the outcome. The pruned tree from part (e) gives the same answer (P(Admitted) = `r num(q3f$P_admitted[2], 3)`).
+
+# Question 4: ROC curves
+
+**How an ROC curve is created.**
+
+1. A classifier gives each observation a score, usually the predicted probability $\hat p$ of the positive class. An observation is classified as positive if $\hat p \ge t$ for some threshold $t$.
+2. For each threshold we compute the **true positive rate** $TPR = TP/(TP+FN)$ (sensitivity) and the **false positive rate** $FPR = FP/(FP+TN)$ (1 - specificity).
+3. We sweep $t$ from 1 down to 0. At $t=1$ nothing is classified positive, giving the point $(0,0)$. At $t=0$ everything is positive, giving $(1,1)$. Plotting all the $(FPR, TPR)$ pairs gives the ROC curve.
+4. The 45$^\circ$ diagonal corresponds to random guessing. The **area under the curve (AUC)** equals the probability that a randomly chosen positive case receives a higher score than a randomly chosen negative case: 0.5 is random and 1 is perfect.
+
+**How we use ROC curves in data analysis.**
+
+* **Comparing models without fixing a threshold.** AUC summarises how well a model *ranks* cases, and it does not depend on the 0.5 cut-off or on the class mix. It is therefore more informative than accuracy when classes are imbalanced (Question 2). If one curve lies above another everywhere, that model is better at every threshold.
+* **Choosing the operating threshold.** The curve shows the full trade-off between catching positives and raising false alarms. We pick the point that fits the costs of the problem. A credit-risk team might require TPR $\geq$ 90% and accept the FPR that comes with it. A marketing campaign with a limited budget might cap the FPR. Without explicit costs, Youden's index (max TPR - FPR) is a common default.
+* **Diagnosing the model.** A curve close to the diagonal means the features carry little signal; the stock models in Question 6 have AUC $\approx$ 0.68–0.73. An AUC that is suspiciously close to 1 is a warning sign of data leakage. ROC curves should always be computed on test or cross-validation data, never on the training data.
+
+**Interpreting the graph.**
+
+* **Both models are far better than chance.** Logistic regression has AUC = 0.965 and the decision tree has AUC = 0.902.
+* **The logistic curve is the better one.** It is a fine staircase because logistic regression produces a continuous probability, so almost every threshold gives a different point. It rises almost vertically: about 72% of positives are caught with essentially no false positives, about 83% at FPR $\approx$ 0.03, about 95% at FPR $\approx$ 0.15, and 100% at FPR $\approx$ 0.45.
+* **The tree curve has very few points.** It is made of straight segments with essentially one interior corner (FPR $\approx$ 0.03, TPR $\approx$ 0.83). A tree can only output as many distinct probabilities as it has leaves, so there are only a few usable thresholds. Between them the ROC is a straight-line interpolation, which suggests this tree is very small.
+* **Comparison.** At a very low false-positive rate ($\approx$ 0.03) the two models perform about the same. At every higher FPR logistic regression dominates; at FPR = 0.15, for example, it detects about 95% of positives against about 87% for the tree.
+* **Conclusion.** Logistic regression is the better classifier here. It has the higher AUC, is better at nearly every threshold, and gives much more freedom to choose the threshold. The tree would only be competitive if we had to operate at a very low false-positive rate.
+
+# Question 5
+
+**(a) Linear probability model (LPM) vs. logistic model.**
+
+1. **The range of predicted probabilities differs.**
+   * The LPM models $P(Y=1\mid X) = X\beta$ directly as a straight line, so fitted "probabilities" can fall below 0 or above 1.
+   * The logistic model passes $X\beta$ through the sigmoid, $P(Y=1\mid X)=e^{X\beta}/(1+e^{X\beta})$, so predictions always lie in $(0,1)$.
+2. **Marginal effects and interpretation differ.**
+   * In the LPM the effect of $x_j$ is constant: a one-unit increase changes the probability by $\beta_j$ whatever the starting level.
+   * In the logistic model the effect on the probability is $\beta_j\,p(1-p)$, which depends on $x$. It is largest around $p=0.5$ and small in the tails (the S-shape). The coefficient $\beta_j$ is the change in the *log-odds*, and $e^{\beta_j}$ is an odds ratio.
+3. **Estimation also differs.** The LPM is estimated by OLS and its errors are heteroskedastic by construction, since $\operatorname{Var}=p(1-p)$. The logistic model is estimated by maximum likelihood.
+
+**(b) Two assumptions of LDA.**
+
+1. **Normality.** Within each class $k$, the predictors follow a multivariate normal distribution, $X \mid Y=k \sim N(\mu_k, \Sigma)$, with a class-specific mean vector $\mu_k$.
+2. **Common covariance.** All classes share the same covariance matrix $\Sigma$.
+
+Under these two assumptions the log posterior odds are linear in $x$, so LDA produces linear decision boundaries. The class priors $\pi_k$ are estimated from the class proportions.
+
+**(c) Main difference between LDA and QDA.**
+
+* **QDA drops the common-covariance assumption.** Each class has its own covariance matrix $\Sigma_k$, so the discriminant function is *quadratic* in $x$ and the decision boundaries can be curved.
+* **The cost is many more parameters to estimate:** $K\,p(p+1)/2$ covariance parameters instead of $p(p+1)/2$. QDA is therefore more flexible, with lower bias but higher variance. It suits large samples or classes whose covariance structures clearly differ.
+* **LDA is often better when $n$ is small** or the covariances are similar.
+
+In Question 6, QDA had the lowest cross-validated accuracy of all the models, which is consistent with its higher variance and with heavy-tailed, non-normal financial ratios.
+
+# Question 6: Predicting the 2019 stock-price direction
+
+```{r q6-load}
+#| results: hide
+```
+
+```{r q6-clean}
+#| results: hide
+```
+
+```{r q6-describe}
+#| results: hide
+```
+
+```{r q6-desc-plots}
+#| include: false
+```
+
+```{r q6-models}
+```
+
+```{r q6-knn-tune}
+#| results: hide
+```
+
+```{r q6-cv}
+#| results: hide
+```
+
+```{r q6-test}
+#| results: hide
+```
+
+```{r q6-best}
+#| results: hide
+```
+
+```{r q6-seed-check}
+#| results: hide
+```
+
+```{r q6-importance}
+#| results: hide
+```
+
+```{r}
+row_of      <- function(m) results[results$Model == m, ]
+best_row_q6 <- row_of(best_model)
+base_row_q6 <- row_of("Baseline: always predict Up")
+lift_pts    <- 100 * (best_row_q6$Test_acc - nir)
+top_test    <- course_results[which.max(course_results$Test_acc), ]
+low_cv      <- course_results[which.min(course_results$CV_acc), ]
+low_test    <- course_results[which.min(course_results$Test_acc), ]
+rf_seed     <- seed_check[seed_check$Model == "Random forest", ]
+bag_seed    <- seed_check[seed_check$Model == "Bagging", ]
+mname       <- function(m) if (m %in% c("LDA", "QDA", "KNN")) m else tolower(m)   # for running text
+sig_txt     <- if (best_vs_nir$p.value < 0.05) "statistically significant" else "not statistically significant"
+```
+
+## (a) Finding the most accurate model
+
+**Data preparation.**
+
+* The data set has `r num(nrow(stock_raw), 0)` companies, 13 financial ratios and the target $y$ (1 = price higher in 2019). The company name is an identifier and is not used as a predictor.
+* `r n_dropped` companies were missing more than half of the 13 ratios and were removed, leaving **`r num(nrow(stock), 0)` companies**. Of these, `r pct(mean(stock$y == "Up"))` rose in 2019.
+* The data were split into a stratified 70% training set (`r num(nrow(train), 0)`) and a 30% test set (`r num(nrow(test), 0)`).
+* The ratios contain extreme outliers (for example, return on equity reaches $1.1\times10^7$) and some missing values (return on assets is missing for `r pct(mean(is.na(stock$roa)))` of firms). Using the **training data only**, we filled missing values with the median and winsorised each ratio at its 1st and 99th percentiles. The same transformation was then applied to the test data, so no information leaks from the test set.
+
+**Models compared.** Because $y$ is a 0/1 variable, we used classification methods. We compared the **seven classification methods taught in the course**, all using the 13 ratios. The linear probability model was added only as a reference benchmark, because its fitted values can fall outside $[0, 1]$.
+
+| Lecture | Model | Settings |
+|:------|:-------------------|:--------------------------------------------------|
+| 6 | Logistic regression | Maximum likelihood |
+| 6 | LDA | Common covariance matrix |
+| 6 | QDA | Class-specific covariance matrices |
+| 8 | Classification tree | Grown with cp = 0.001, then pruned at the cp with the lowest xerror |
+| 9 | Bagging | 500 bootstrap trees, all 13 ratios tried at each split ($m_{try} = 13$) |
+| 9 | Random forest | 500 trees, $m_{try} = `r rf_final$mtry`$ randomly chosen ratios per split |
+| 9 | KNN | Standardised ratios; $k = `r knn_k`$ chosen by 10-fold CV over $k = 1, 3, \dots, 101$ |
+| 6 | LPM (benchmark only) | OLS on the 0/1 target |
+
+Every model classifies a stock as "Up" when $\hat p > 0.5$. Models were **ranked by 10-fold cross-validated accuracy on the training set**, using the same folds for every model, and then **checked once on the untouched test set** (Lecture 7).
+
+```{r}
+tab6 <- results |>
+  mutate(across(c(CV_acc, CV_sd, Test_acc, Sensitivity, Specificity), ~ 100 * .x))
+knitr::kable(tab6, format = "latex", position = "H", digits = c(0, 0, 1, 1, 1, 1, 1, 3),
+  booktabs = TRUE, linesep = "", align = "llrrrrrr",
+  col.names = c("Model", "Lecture", "CV acc.", "CV s.d.", "Test acc.", "Sensitivity", "Specificity", "Test AUC"),
+  caption = "Model comparison, sorted by CV accuracy (accuracy, sensitivity and specificity in \\%; positive class = price up; threshold 0.5)",
+  escape = FALSE)
+```
+
+```{r q6-plots}
+#| fig-width: 9
+#| fig-height: 7.2
+#| fig-cap: "Top: accuracy of each model (10-fold CV mean +/- 1 s.d. and test set); dotted line = 65% target, dashed line = naive rule. Bottom: random-forest variable importance and ROC curves of the seven course models on the test set."
+```
+
+```{r q6-memo-fig}
+#| include: false
+```
+
+**All models meet the 65% accuracy requirement.**
+
+* Every course model is above 65% in cross-validation (lowest: `r low_cv$Model`, `r pct(low_cv$CV_acc)`) and on the test set (lowest: `r low_test$Model`, `r pct(low_test$Test_acc)`).
+* The tougher benchmark is the naive rule "always predict Up", which already scores `r pct(base_row_q6$CV_acc)` in cross-validation and `r pct(nir)` on the test set.
+
+**Result: the `r mname(best_model)` is the best model.**
+
+* **Accuracy.** It has the highest cross-validated accuracy, **`r pct(best_row_q6$CV_acc)`**. Cross-validation is the basis for choosing the model; the test set is only used to confirm the choice.
+* **Test set.** On the test set it reaches **`r pct(best_row_q6$Test_acc)`**, with AUC `r num(best_row_q6$AUC, 3)`. `r if (top_test$Model != best_model) paste0("The ", mname(top_test$Model), " scores slightly higher on the test set (", pct(top_test$Test_acc), "), but differences of this size are within noise. ")`Refitting the random forest with 10 different seeds gives test accuracies between `r pct(rf_seed$min)` and `r pct(rf_seed$max)` (mean `r pct(rf_seed$mean)`).
+* **Tree $\rightarrow$ bagging $\rightarrow$ random forest.** CV accuracy rises from `r pct(row_of("Classification tree")$CV_acc)` for a single pruned tree, to `r pct(row_of("Bagging")$CV_acc)` for bagging, to `r pct(row_of("Random forest")$CV_acc)` for the random forest.
+  * Averaging many bootstrap trees reduces variance (Question 1).
+  * Letting each split consider only `r rf_final$mtry` random ratios makes the trees less correlated, so the average reduces variance further.
+  * Across the 10 seeds the random forest beats bagging on the test set on average (`r pct(rf_seed$mean)` against `r pct(bag_seed$mean)`).
+* **Most useful predictors.** EPS and the P/E ratio top the importance ranking, followed by the two profit margins. P/E is recorded as 0 for every loss-making company, so both variables mainly capture *whether a company is profitable*.
+* **Confusion matrix on the test set.** Rows are predictions and columns are actual outcomes:
+
+```{r}
+knitr::kable(as.data.frame.matrix(best_cm), booktabs = TRUE,
+             caption = paste("Test-set confusion matrix of the", mname(best_model)))
+```
+
+Two caveats apply:
+
+* **The differences between the top models are small.** Logistic regression, LDA, bagging and KNN are all within about one cross-validation standard deviation of the random forest, so they are statistically similar.
+* **All models are only slightly better than the naive rule.** On the test set the `r mname(best_model)` beats "always predict Up" by `r num(lift_pts, 1)` percentage points. This gain is `r sig_txt` at the 5% level (one-sided binomial test, $p =$ `r fmt_p(best_vs_nir$p.value)`). Part (c) discusses what this means.
+
+\newpage
+
+## (b) One-page report for the supervisor
+
+\small
+
+**To:** Supervisor | **From:** Group \_\_\_ | **Date:** October 2026\
+**Subject:** Can 2018 financial ratios predict which US stocks rise in 2019?
+
+**Data.** We analysed 13 financial ratios from 2018 annual reports for `r num(nrow(stock_raw), 0)` US-listed companies. `r n_dropped` companies with most ratios missing were dropped, leaving `r num(nrow(stock), 0)`. **`r pct(mean(stock$y == "Up"))` of these stocks rose in 2019**, so a naive "everything goes up" rule is already right `r pct(mean(stock$y == "Up"))` of the time, and any useful model must beat that benchmark. The ratios are extremely skewed (ROE reaches $1.1\times10^7$), so Table 5 compares medians and uses the Wilcoxon rank-sum test.
+
+```{r}
+fmt_med <- function(x) formatC(x, digits = 3, format = "fg")
+memo_tab <- desc_stats |>
+  transmute(Ratio = Feature, Fell = fmt_med(Median_Down), Rose = fmt_med(Median_Up),
+            p = fmt_p(Wilcoxon_p))
+half <- ceiling(nrow(memo_tab) / 2)
+right <- memo_tab[(half + 1):nrow(memo_tab), ]
+right[nrow(right) + seq_len(half - nrow(right)), ] <- ""
+memo_kable <- knitr::kable(cbind(memo_tab[1:half, ], right), format = "latex", position = "H",
+             booktabs = TRUE, linesep = "", row.names = FALSE,
+             col.names = rep(c("Ratio", "Fell", "Rose", "Wilcoxon p"), 2),
+             caption = "Median of each 2018 ratio, for stocks that fell or rose in 2019")
+# smaller font inside the float (LaTeX floats reset the font size)
+knitr::asis_output(sub("\\centering", "\\centering\\footnotesize", memo_kable, fixed = TRUE))
+```
+
+**Descriptive findings.** Stocks that rose were typically **profitable dividend payers**. Median EPS was `r num(desc_stats$Median_Up[desc_stats$Feature == "EPS"], 2)` for rising stocks against `r num(desc_stats$Median_Down[desc_stats$Feature == "EPS"], 2)` for falling ones, and median profit margin was `r pct(desc_stats$Median_Up[desc_stats$Feature == "Profit margin"])` against `r pct(desc_stats$Median_Down[desc_stats$Feature == "Profit margin"])`. `r pct(rise_by_trait$rise_rate[rise_by_trait$trait == "Profitable (EPS > 0)" & rise_by_trait$group == "Yes"], 0)` of profitable companies rose, compared with `r pct(rise_by_trait$rise_rate[rise_by_trait$trait == "Profitable (EPS > 0)" & rise_by_trait$group == "No"], 0)` of loss-making ones (Figure 5, left). `r sum(desc_stats$Wilcoxon_p < 0.01)` of the 13 ratios differ significantly at the 1% level; R&D-expense growth does not. Several ratios are near-duplicates, such as the two dividend yields and the two profit margins (rank correlation above 0.9).
+
+```{r}
+#| fig-width: 9
+#| fig-height: 2.9
+#| out-width: "100%"
+#| fig-cap: "Left: share of stocks that rose in 2019, for companies with and without each trait (dashed line = all companies). Right: model accuracy against the 65% target (dotted) and the naive benchmark (dashed)."
+fig_q6_memo
+```
+
+**Model results.** We compared the seven classification methods taught in the course: logistic regression, LDA, QDA, a classification tree, bagging, a random forest and KNN. Each was trained with 10-fold cross-validation on 70% of the data and confirmed on the remaining 30%. **All of them exceed the 65% accuracy target. The random forest performed best in cross-validation** (`r pct(best_row_q6$CV_acc)`), with `r pct(best_row_q6$Test_acc)` test accuracy and an AUC of `r num(best_row_q6$AUC, 2)`. Its most useful inputs were EPS, the P/E ratio and the profit margins.
+
+**Bottom line.** On the test set the best model beats the naive benchmark by only `r num(lift_pts, 1)` percentage points, and it correctly flags just `r pct(best_row_q6$Specificity, 0)` of the stocks that fell. 2018 accounting ratios on their own carry only weak information about the direction of 2019 prices. **We do not recommend using the model for investment decisions as it stands.** The next steps are to add market and sector data, to predict returns *relative to the market*, and to tune the models further (see 6(c)).
+
+\normalsize
+
+\newpage
+
+## (c) Is the best model good enough?
+
+**It meets the 65% accuracy target, but it is not good enough to be useful.** Several facts point the same way:
+
+* **Little improvement over the naive rule.** The `r mname(best_model)`'s test accuracy (`r pct(best_row_q6$Test_acc)`) is only `r num(lift_pts, 1)` points above always predicting "Up" (`r pct(nir)`), and the difference is `r sig_txt` (p = `r fmt_p(best_vs_nir$p.value)`). Its cross-validated accuracy is only about `r num(100 * (best_row_q6$CV_acc - base_row_q6$CV_acc), 1)` points above the naive rule's.
+* **Poor detection of falling stocks.** Specificity is `r pct(best_row_q6$Specificity)`, so about `r pct(1 - best_row_q6$Specificity, 0)` of the stocks that fell are still predicted to rise.
+* **Modest ranking ability.** An AUC of `r num(best_row_q6$AUC, 2)` is modest by any standard.
+
+This is not surprising. A stock's price direction over a full year is driven largely by market-wide movements (2019 was a strong year for US equities, which is why about two-thirds of stocks rose) and by news that arrives *after* the 2018 accounts are published. Publicly available accounting ratios are also largely priced in already.
+
+**Possible ways to increase accuracy.**
+
+1. **Better and more features.** These are likely to help most.
+   * Add market-based information: past price momentum and volatility, beta, market capitalisation, trading volume.
+   * Add sector or industry dummies and *sector-relative* ratios.
+   * Add more of the 200+ indicators in the original data source (valuation multiples, cash-flow measures, growth rates).
+   * Add macroeconomic variables and analyst-revision or news-sentiment data.
+2. **A better-defined target and more data.**
+   * Predict whether a stock *outperforms the market or its sector*, which removes the common market drift that no firm-level ratio can explain.
+   * Pool several years (for example 2014–2018) and validate on later years, so the model is trained and tested over different market conditions.
+3. **Better tuning of the course models.**
+   * Tune the random forest's $m_{try}$, node size and number of trees with out-of-bag error or cross-validation. A quick out-of-bag check over $m_{try} = 1, \dots, 13$ moved accuracy by only about one point, so large gains are unlikely from this alone.
+   * Select features for KNN and LDA, since irrelevant or duplicated ratios hurt distance-based and linear methods.
+   * Average the predicted probabilities of several models, for example logistic regression, LDA and the random forest.
+   * Methods beyond this course, such as boosting, could be tried later.
+4. **Better data treatment.**
+   * Missing-value indicators or multiple imputation, since missingness itself may be informative.
+   * Log or rank transformations of the skewed ratios.
+   * Removing redundant ratios, such as the duplicate dividend yields and profit margins.
+5. **A threshold and metric that match the business goal (Lecture 7).**
+   * If avoiding losers matters, choose the threshold from the ROC curve instead of 0.5, to raise specificity.
+   * Judge the model by AUC, balanced accuracy or, ultimately, the portfolio return it produces, rather than raw accuracy, which mostly rewards predicting the majority class.
+
+\newpage
+
+# Appendix: Descriptive graphics for Question 6
+
+```{r}
+#| fig-width: 10
+#| fig-height: 9
+#| fig-cap: "Class balance, rank correlations between the ratios, and the distribution of every ratio by 2019 price direction."
+fig_q6_desc
+```
