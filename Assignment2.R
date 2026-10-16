@@ -66,8 +66,8 @@ FP <- 100     # predicted default,     truly non-default (false alarms)
 TP <- 700     # predicted default,     truly default
 
 conf_mat <- matrix(c(TN, FP, FN, TP), nrow = 2,
-                   dimnames = list(Predicted = c("Non-default (-)", "Default (+)"),
-                                   True      = c("Non-default (-)", "Default (+)")))
+  dimnames = list(Predicted = c("Non-default (-)", "Default (+)"),
+                  True      = c("Non-default (-)", "Default (+)")))
 print(conf_mat)
 
 N <- TN + FN + FP + TP
@@ -81,7 +81,8 @@ q2_metrics <- c(
   "Baseline accuracy: predict all non-default" = (TN + FP) / N,
   "Balanced accuracy"                = (TP / (TP + FN) + TN / (TN + FP)) / 2
 )
-q2_table <- data.frame(Metric = names(q2_metrics), Value = pct(q2_metrics, 2), row.names = NULL)
+q2_table <- data.frame(Metric = names(q2_metrics),
+                       Value  = pct(q2_metrics, 2), row.names = NULL)
 print(q2_table)
 
 
@@ -93,33 +94,40 @@ print(q2_table)
 ## ---- q3-load ----
 adm <- as.data.frame(read_excel(find_data("admission.xls")))
 adm$rank  <- factor(adm$rank, levels = 1:4)            # 1 = most prestigious
-adm$admit <- factor(adm$admit, levels = c(0, 1), labels = c("Rejected", "Admitted"))
+adm$admit <- factor(adm$admit, levels = c(0, 1),
+                    labels = c("Rejected", "Admitted"))
 str(adm)
 print(summary(adm))
 
 ## ---- q3a ----
 # (a) Relationships among GRE, GPA and rank
-rank_cols <- c("1" = "#0072B2", "2" = "#009E73", "3" = "#E69F00", "4" = "#D55E00")
+rank_cols <- c("1" = "#0072B2", "2" = "#009E73",
+               "3" = "#E69F00", "4" = "#D55E00")
 
 p_scatter <- ggplot(adm, aes(gpa, gre, colour = rank)) +
   geom_point(position = position_jitter(width = 0.01, height = 4, seed = 1),
              alpha = 0.55, size = 1.5) +
   geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.9) +
   scale_colour_manual(values = rank_cols, name = "Institution rank") +
-  labs(title = "GRE vs GPA (lines: linear fit within each rank)", x = "GPA", y = "GRE") +
+  labs(title = "GRE vs GPA (lines: linear fit within each rank)",
+       x = "GPA", y = "GRE") +
   theme(legend.position = "right")
 
 p_gpa <- ggplot(adm, aes(rank, gpa, fill = rank)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8) +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 2.2, fill = "white") +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 2.2,
+               fill = "white") +
   scale_fill_manual(values = rank_cols, guide = "none") +
-  labs(title = "GPA by rank (diamond = mean)", x = "Institution rank", y = "GPA")
+  labs(title = "GPA by rank (diamond = mean)",
+       x = "Institution rank", y = "GPA")
 
 p_gre <- ggplot(adm, aes(rank, gre, fill = rank)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8) +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 2.2, fill = "white") +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 2.2,
+               fill = "white") +
   scale_fill_manual(values = rank_cols, guide = "none") +
-  labs(title = "GRE by rank (diamond = mean)", x = "Institution rank", y = "GRE")
+  labs(title = "GRE by rank (diamond = mean)",
+       x = "Institution rank", y = "GRE")
 
 fig_q3a <- p_scatter / (p_gpa | p_gre) + plot_layout(heights = c(1.15, 1))
 print(fig_q3a)
@@ -127,9 +135,11 @@ save_plot(fig_q3a, "q3a_features.png", width = 8, height = 6.5)
 
 # Correlations that support the picture
 q3a_cor <- c(
-  "Pearson r(GRE, GPA)"   = cor(adm$gre, adm$gpa),
-  "Spearman rho(rank, GPA)" = cor(as.numeric(adm$rank), adm$gpa, method = "spearman"),
-  "Spearman rho(rank, GRE)" = cor(as.numeric(adm$rank), adm$gre, method = "spearman")
+  "Pearson r(GRE, GPA)"     = cor(adm$gre, adm$gpa),
+  "Spearman rho(rank, GPA)" = cor(as.numeric(adm$rank), adm$gpa,
+                                  method = "spearman"),
+  "Spearman rho(rank, GRE)" = cor(as.numeric(adm$rank), adm$gre,
+                                  method = "spearman")
 )
 print(round(q3a_cor, 3))
 print(cor.test(adm$gre, adm$gpa)$p.value)
@@ -138,7 +148,8 @@ print(cor.test(adm$gre, adm$gpa)$p.value)
 # (b) Average GPA by institution rank
 gpa_by_rank <- adm |>
   group_by(rank) |>
-  summarise(applicants = n(), mean_GPA = mean(gpa), mean_GRE = mean(gre), .groups = "drop")
+  summarise(applicants = n(), mean_GPA = mean(gpa), mean_GRE = mean(gre),
+            .groups = "drop")
 print(gpa_by_rank)
 
 ## ---- q3c ----
@@ -157,12 +168,14 @@ overall_admit_rate <- mean(adm$admit == "Admitted")
 set.seed(2026)   # rpart's 10-fold cross-validation (xerror) uses random folds
 tree_adm <- rpart(admit ~ gpa + rank + gre, data = adm, method = "class")
 print(tree_adm)
-print(round(tree_adm$variable.importance, 2))   # total impurity reduction (incl. surrogate splits)
+# Variable importance = total impurity reduction (incl. surrogate splits)
+print(round(tree_adm$variable.importance, 2))
 
 ## ---- q3d-plot ----
 rpart.plot(tree_adm, type = 2, extra = 106, under = TRUE, faclen = 0,
            box.palette = "BuGn", tweak = 1.05,
-           main = "Admission decision tree (number in box = P(Admitted), % = share of applicants)")
+           main = paste("Admission decision tree (number in box = P(Admitted),",
+                        "% = share of applicants)"))
 
 ## ---- q3e ----
 # (e) Complexity-parameter table
@@ -171,10 +184,13 @@ printcp(tree_adm)
 ## ---- q3e-cp ----
 cp_tab   <- as.data.frame(tree_adm$cptable)
 best_row <- which.min(cp_tab$xerror)
-cp_min   <- cp_tab$CP[best_row]                                   # minimum-xerror rule
+# Minimum-xerror rule
+cp_min   <- cp_tab$CP[best_row]
+# One-standard-error rule: simplest tree with xerror <= min(xerror) + its xstd
 se_limit <- cp_tab$xerror[best_row] + cp_tab$xstd[best_row]
-cp_1se   <- cp_tab$CP[which(cp_tab$xerror <= se_limit)[1]]        # one-standard-error rule
-root_err <- mean(adm$admit == "Admitted")                        # root node error = 127/400
+cp_1se   <- cp_tab$CP[which(cp_tab$xerror <= se_limit)[1]]
+# Root node error = 127/400 (the root predicts "Rejected" for everyone)
+root_err <- mean(adm$admit == "Admitted")
 
 cp_tab$train_error_pct <- 100 * root_err * cp_tab$`rel error`
 cp_tab$cv_error_pct    <- 100 * root_err * cp_tab$xerror
@@ -186,7 +202,8 @@ print(tree_pruned)
 
 ## ---- q3e-plot ----
 par(mfrow = c(1, 2), mar = c(4, 4, 6.5, 1))
-plotcp(tree_adm)      # top axis = number of leaves; dotted line = min xerror + 1 SE
+# Top axis = number of leaves; dotted line = min xerror + 1 SE
+plotcp(tree_adm)
 title("Cross-validated error vs cp", line = 5, cex.main = 0.95)
 rpart.plot(tree_pruned, type = 2, extra = 106, under = TRUE, faclen = 0,
            box.palette = "BuGn", main = "Pruned tree (cp with minimum xerror)",
@@ -195,13 +212,16 @@ par(mfrow = c(1, 1))
 
 ## ---- q3f ----
 # (f) Applicant with GPA = 3.8, GRE = 690 from a rank-4 institution
-new_applicant <- data.frame(gpa = 3.8, gre = 690, rank = factor(4, levels = 1:4))
+new_applicant <- data.frame(gpa = 3.8, gre = 690,
+                            rank = factor(4, levels = 1:4))
 q3f <- data.frame(
-  tree          = c("Full tree from (d)", "Pruned tree from (e)"),
-  P_admitted    = c(predict(tree_adm,    new_applicant, type = "prob")[, "Admitted"],
-                    predict(tree_pruned, new_applicant, type = "prob")[, "Admitted"]),
-  decision      = c(as.character(predict(tree_adm,    new_applicant, type = "class")),
-                    as.character(predict(tree_pruned, new_applicant, type = "class")))
+  tree       = c("Full tree from (d)", "Pruned tree from (e)"),
+  P_admitted = c(
+    predict(tree_adm,    new_applicant, type = "prob")[, "Admitted"],
+    predict(tree_pruned, new_applicant, type = "prob")[, "Admitted"]),
+  decision   = c(
+    as.character(predict(tree_adm,    new_applicant, type = "class")),
+    as.character(predict(tree_pruned, new_applicant, type = "class")))
 )
 print(q3f)
 

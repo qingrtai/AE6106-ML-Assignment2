@@ -17,7 +17,8 @@ format:
         \usepackage{float}
         \usepackage{booktabs}
         \usepackage{amsmath}
-        \RecustomVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\},fontsize=\small}
+        \usepackage{fvextra}
+        \RecustomVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines}
 execute:
   echo: false
   warning: false
@@ -353,11 +354,14 @@ Every model classifies a stock as "Up" when $\hat p > 0.5$. Models were **ranked
 ```{r}
 tab6 <- results |>
   mutate(across(c(CV_acc, CV_sd, Test_acc, Sensitivity, Specificity), ~ 100 * .x))
-knitr::kable(tab6, format = "latex", position = "H", digits = c(0, 0, 1, 1, 1, 1, 1, 3),
+tab6_kable <- knitr::kable(tab6, format = "latex", position = "H", digits = c(0, 0, 1, 1, 1, 1, 1, 3),
   booktabs = TRUE, linesep = "", align = "llrrrrrr",
   col.names = c("Model", "Lecture", "CV acc.", "CV s.d.", "Test acc.", "Sensitivity", "Specificity", "Test AUC"),
   caption = "Model comparison, sorted by CV accuracy (accuracy, sensitivity and specificity in \\%; positive class = price up; threshold 0.5)",
   escape = FALSE)
+# smaller font and column gaps so the 8-column table fits the text width
+knitr::asis_output(sub("\\centering", "\\centering\\small\\setlength{\\tabcolsep}{4pt}",
+                       tab6_kable, fixed = TRUE))
 ```
 
 ```{r q6-plots}
