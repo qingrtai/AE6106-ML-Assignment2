@@ -1,6 +1,6 @@
 # =============================================================================
 #  Assignment 2 - Data Analytics and Machine Learning (October 2026)
-#  Group: ______________________________________________
+#  Members: TAI QINGRUI (G2509161H), WAN YUXUAN (G2509146H), FENG YUE (G2509544L)
 #
 #  R code for Questions 2, 3 and 6. Questions 1, 4 and 5 are theoretical
 #  and are answered in the PDF report.

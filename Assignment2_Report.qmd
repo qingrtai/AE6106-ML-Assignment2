@@ -1,8 +1,7 @@
 ---
 title: "Assignment 2: Data Analytics and Machine Learning"
-subtitle: "Group ___"
-author: "Member 1 (Student ID) · Member 2 (Student ID) · Member 3 (Student ID)"
-date: today
+author: "TAI QINGRUI (G2509161H) · WAN YUXUAN (G2509146H) · FENG YUE (G2509544L)"
+date: 2026-10-16
 date-format: "D MMMM YYYY"
 format:
   pdf:
@@ -41,8 +40,6 @@ num   <- function(x, d = 2) formatC(x, format = "f", digits = d, big.mark = ",")
 
 ```{r setup}
 ```
-
-*The complete R code is in the accompanying script `Assignment2.R`. Code is shown below for Questions 2 and 3; for Question 6 only the results are shown, to keep the report readable.*
 
 # Question 1: Bias–variance decomposition
 
@@ -108,7 +105,6 @@ We treat **Default as the positive class**. The table gives TP = 700, FN = 400 (
 
 * **GRE and GPA are moderately positively correlated** ($r =$ `r num(q3a_cor[1], 2)`, $p < 0.001$). Applicants with a higher GPA also tend to score higher on the GRE, but the scatter is wide, so the two scores carry partly different information.
 * **Rank is only weakly related to the two scores.** Mean GRE falls steadily from rank 1 (`r num(mean(adm$gre[adm$rank == "1"]), 0)`) to rank 4 (`r num(mean(adm$gre[adm$rank == "4"]), 0)`). GPA shows no monotone pattern: rank 3 has a higher mean GPA than rank 2. The box plots overlap heavily (Spearman correlation of rank with GPA is `r num(q3a_cor[2], 2)` and with GRE is `r num(q3a_cor[3], 2)`).
-* **The GRE–GPA slope is similar in every rank**, so there is no strong interaction between rank and the scores.
 * **Overall**, prestige of the undergraduate institution is not simply a proxy for academic ability. The three features can contribute separately to an admission decision.
 
 ## (b) Average GPA by institution rank
@@ -241,7 +237,7 @@ Following the tree from part (d):
 * **Both models are far better than chance.** Logistic regression has AUC = 0.965 and the decision tree has AUC = 0.902.
 * **The logistic curve is the better one.** It is a fine staircase because logistic regression produces a continuous probability, so almost every threshold gives a different point. It rises almost vertically: about 72% of positives are caught with essentially no false positives, about 83% at FPR $\approx$ 0.03, about 95% at FPR $\approx$ 0.15, and 100% at FPR $\approx$ 0.45.
 * **The tree curve has very few points.** It is made of straight segments with essentially one interior corner (FPR $\approx$ 0.03, TPR $\approx$ 0.83). A tree can only output as many distinct probabilities as it has leaves, so there are only a few usable thresholds. Between them the ROC is a straight-line interpolation, which suggests this tree is very small.
-* **Comparison.** At a very low false-positive rate ($\approx$ 0.03) the two models perform about the same. At every higher FPR logistic regression dominates; at FPR = 0.15, for example, it detects about 95% of positives against about 87% for the tree.
+* **Comparison.** At a very low false-positive rate ($\approx$ 0.03) the two models perform about the same. At every higher FPR logistic regression dominates; at FPR = 0.15, for example, it detects about 95% of positives against about 85% for the tree.
 * **Conclusion.** Logistic regression is the better classifier here. It has the higher AUC, is better at nearly every threshold, and gives much more freedom to choose the threshold. The tree would only be competitive if we had to operate at a very low false-positive rate.
 
 # Question 5
@@ -406,7 +402,7 @@ Two caveats apply:
 
 \small
 
-**To:** Supervisor | **From:** Group \_\_\_ | **Date:** October 2026\
+**To:** Supervisor | **From:** Tai Qingrui, Wan Yuxuan, Feng Yue | **Date:** 16 October 2026\
 **Subject:** Can 2018 financial ratios predict which US stocks rise in 2019?
 
 **Data.** We analysed 13 financial ratios from 2018 annual reports for `r num(nrow(stock_raw), 0)` US-listed companies. `r n_dropped` companies with most ratios missing were dropped, leaving `r num(nrow(stock), 0)`. **`r pct(mean(stock$y == "Up"))` of these stocks rose in 2019**, so a naive "everything goes up" rule is already right `r pct(mean(stock$y == "Up"))` of the time, and any useful model must beat that benchmark. The ratios are extremely skewed (ROE reaches $1.1\times10^7$), so Table 5 compares medians and uses the Wilcoxon rank-sum test.
@@ -466,7 +462,7 @@ This is not surprising. A stock's price direction over a full year is driven lar
    * Predict whether a stock *outperforms the market or its sector*, which removes the common market drift that no firm-level ratio can explain.
    * Pool several years (for example 2014–2018) and validate on later years, so the model is trained and tested over different market conditions.
 3. **Better tuning of the course models.**
-   * Tune the random forest's $m_{try}$, node size and number of trees with out-of-bag error or cross-validation. A quick out-of-bag check over $m_{try} = 1, \dots, 13$ moved accuracy by only about one point, so large gains are unlikely from this alone.
+   * Tune the random forest's $m_{try}$, node size and number of trees with out-of-bag error or cross-validation.
    * Select features for KNN and LDA, since irrelevant or duplicated ratios hurt distance-based and linear methods.
    * Average the predicted probabilities of several models, for example logistic regression, LDA and the random forest.
    * Methods beyond this course, such as boosting, could be tried later.
